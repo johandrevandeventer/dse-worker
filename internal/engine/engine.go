@@ -194,11 +194,11 @@ func (e *Engine) Stop() {
 	// Perform cleanup
 	e.cleanup()
 
-	// Log application stop
-	coreutils.WriteToLogFile(e.connectionsLogFilePath, fmt.Sprintf("%s: App stopped\n", endTime.Format(time.RFC3339)))
-
 	endTime = time.Now()
 	duration := endTime.Sub(startTime)
+
+	// Log application stop
+	coreutils.WriteToLogFile(e.connectionsLogFilePath, fmt.Sprintf("%s: App stopped\n", endTime.Format(time.RFC3339)))
 
 	e.statePersister.Set("app.status", "stopped")
 	e.statePersister.Set("app.end_time", endTime.Format(time.RFC3339))

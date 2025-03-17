@@ -111,7 +111,7 @@ func GensetWorker(msg payload.Payload, logger *zap.Logger) (*workers.DataStruct,
 				ControllerSerialNumber: device.ControllerSerialNumber,
 				DeviceName:             device.DeviceName,
 				DeviceSerialNumber:     device.DeviceSerialNumber,
-				Data:                   processedData,
+				Data:                   rawData,
 				Timestamp:              timestamp,
 			}
 

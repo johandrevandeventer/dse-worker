@@ -90,20 +90,28 @@ func (e *Engine) startWorker() {
 				return
 			}
 
+			influxdb_kafka_topic := "rubicon_kafka_influxdb"
+			kodelabs_kafka_topic := "rubicon_kafka_kodelabs"
+
+			if flags.FlagEnvironment == "development" {
+				influxdb_kafka_topic = "rubicon_kafka_influxdb_development"
+				kodelabs_kafka_topic = "rubicon_kafka_kodelabs_development"
+			}
+
 			// Send the processed data to the Kafka producer
-			err = e.kafkaProducerPool.SendMessage(e.ctx, "rubicon_kafka_influxdb", serializedRp)
+			err = e.kafkaProducerPool.SendMessage(e.ctx, influxdb_kafka_topic, serializedRp)
 			if err != nil {
 				kafkaProducerLogger.Error("Failed to send raw data to Kafka", zap.Error(err))
 				return
 			}
 
-			err = e.kafkaProducerPool.SendMessage(e.ctx, "rubicon_kafka_influxdb", serializedPp)
+			err = e.kafkaProducerPool.SendMessage(e.ctx, influxdb_kafka_topic, serializedPp)
 			if err != nil {
 				kafkaProducerLogger.Error("Failed to send processed data to Kafka", zap.Error(err))
 				return
 			}
 
-			err = e.kafkaProducerPool.SendMessage(e.ctx, "rubicon_kafka_kodelabs", serializedPp)
+			err = e.kafkaProducerPool.SendMessage(e.ctx, kodelabs_kafka_topic, serializedPp)
 			if err != nil {
 				kafkaProducerLogger.Error("Failed to send processed data to Kafka", zap.Error(err))
 				return

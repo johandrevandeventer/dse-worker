@@ -52,7 +52,7 @@ func GensetWorker(msg payload.Payload, logger *zap.Logger) (*workers.DataStruct,
 
 	logger.Debug("Fetching devices by controller ID", zap.String("controllerId", controllerId))
 
-	devices, err := workers.GetDevicesByControllerSerialNumber(controllerId)
+	devices, err := workers.GetDevicesByControllerIdentifier(controllerId)
 	if err != nil {
 		return rawDataStruct, processedDataStruct, fmt.Errorf("error getting devices by controller ID: %w", err)
 	}
@@ -62,7 +62,7 @@ func GensetWorker(msg payload.Payload, logger *zap.Logger) (*workers.DataStruct,
 	}
 
 	for _, device := range devices {
-		if device.ControllerSerialNumber != controllerId {
+		if device.ControllerIdentifier != controllerId {
 			continue
 		}
 
@@ -76,8 +76,8 @@ func GensetWorker(msg payload.Payload, logger *zap.Logger) (*workers.DataStruct,
 		}
 
 		for _, ignoredDevice := range ignoredDevices {
-			if device.DeviceSerialNumber == ignoredDevice {
-				logger.Warn("Device is ignored", zap.String("device_serial_number", device.DeviceSerialNumber))
+			if device.DeviceIdentifier == ignoredDevice {
+				logger.Warn("Device is ignored", zap.String("device_serial_number", device.DeviceIdentifier))
 				continue
 			}
 		}
@@ -100,35 +100,35 @@ func GensetWorker(msg payload.Payload, logger *zap.Logger) (*workers.DataStruct,
 			}
 
 			rawDataStruct = &workers.DataStruct{
-				State:                  "Pre",
-				CustomerID:             device.Site.Customer.ID,
-				CustomerName:           device.Site.Customer.Name,
-				SiteID:                 device.Site.ID,
-				SiteName:               device.Site.Name,
-				Gateway:                device.Gateway,
-				Controller:             device.Controller,
-				DeviceType:             device.DeviceType,
-				ControllerSerialNumber: device.ControllerSerialNumber,
-				DeviceName:             device.DeviceName,
-				DeviceSerialNumber:     device.DeviceSerialNumber,
-				Data:                   rawData,
-				Timestamp:              timestamp,
+				State:                "Pre",
+				CustomerID:           device.Site.Customer.ID,
+				CustomerName:         device.Site.Customer.Name,
+				SiteID:               device.Site.ID,
+				SiteName:             device.Site.Name,
+				Gateway:              device.Gateway,
+				Controller:           device.Controller,
+				DeviceType:           device.DeviceType,
+				ControllerIdentifier: device.ControllerIdentifier,
+				DeviceName:           device.DeviceName,
+				DeviceIdentifier:     device.DeviceIdentifier,
+				Data:                 rawData,
+				Timestamp:            timestamp,
 			}
 
 			processedDataStruct = &workers.DataStruct{
-				State:                  "Post",
-				CustomerID:             device.Site.Customer.ID,
-				CustomerName:           device.Site.Customer.Name,
-				SiteID:                 device.Site.ID,
-				SiteName:               device.Site.Name,
-				Gateway:                device.Gateway,
-				Controller:             device.Controller,
-				DeviceType:             device.DeviceType,
-				ControllerSerialNumber: device.ControllerSerialNumber,
-				DeviceName:             device.DeviceName,
-				DeviceSerialNumber:     device.DeviceSerialNumber,
-				Data:                   processedData,
-				Timestamp:              timestamp,
+				State:                "Post",
+				CustomerID:           device.Site.Customer.ID,
+				CustomerName:         device.Site.Customer.Name,
+				SiteID:               device.Site.ID,
+				SiteName:             device.Site.Name,
+				Gateway:              device.Gateway,
+				Controller:           device.Controller,
+				DeviceType:           device.DeviceType,
+				ControllerIdentifier: device.ControllerIdentifier,
+				DeviceName:           device.DeviceName,
+				DeviceIdentifier:     device.DeviceIdentifier,
+				Data:                 processedData,
+				Timestamp:            timestamp,
 			}
 
 			return rawDataStruct, processedDataStruct, nil

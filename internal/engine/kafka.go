@@ -44,7 +44,12 @@ func (e *Engine) startKafkaConsumer() {
 	}
 
 	// Define Kafka consumer config
-	consumerConfig := config.NewKafkaConsumerConfig("localhost:9092", "rubicon_kafka_dse", "dse-consumer-group")
+	var consumerConfig *config.KafkaConsumerConfig
+	if flags.FlagEnvironment == "development" {
+		consumerConfig = config.NewKafkaConsumerConfig("localhost:9092", "rubicon_kafka_dse_development", "dse-development-consumer-group")
+	} else {
+		consumerConfig = config.NewKafkaConsumerConfig("localhost:9092", "rubicon_kafka_dse", "dse-consumer-group")
+	}
 
 	// Initialize Kafka Consumer Pool
 	kafkaConsumer, err := consumer.NewKafkaConsumer(e.ctx, consumerConfig, kafkaConsumerLogger)
@@ -53,13 +58,6 @@ func (e *Engine) startKafkaConsumer() {
 	}
 
 	e.kafkaConsumer = kafkaConsumer
-
-	// // Start Prometheus Metrics Server
-	// e.wg.Add(1)
-	// go func() {
-	// 	defer e.wg.Done()
-	// 	prometheusserver.StartPrometheusServer(":2113", e.ctx)
-	// }()
 
 	// Start Kafka consumer
 	e.wg.Add(1)

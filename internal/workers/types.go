@@ -12,17 +12,17 @@ type IgnoredControllersAndDevices struct {
 }
 
 type DataStruct struct {
-	State                  string
-	CustomerID             uuid.UUID
-	CustomerName           string
-	SiteID                 uuid.UUID
-	SiteName               string
-	Gateway                string
-	Controller             string
-	DeviceType             string
-	ControllerSerialNumber string
-	DeviceName             string
-	DeviceSerialNumber     string
-	Data                   map[string]any
-	Timestamp              time.Time
+	State                string
+	CustomerID           uuid.UUID
+	CustomerName         string
+	SiteID               uuid.UUID
+	SiteName             string
+	Gateway              string
+	Controller           string
+	DeviceType           string
+	ControllerIdentifier string
+	DeviceName           string
+	DeviceIdentifier     string
+	Data                 map[string]any
+	Timestamp            time.Time
 }

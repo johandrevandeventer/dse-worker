@@ -99,15 +99,15 @@ func GetAllDevices() ([]models.Device, error) {
 	return devices, nil
 }
 
-// Helper function to get devices by controller serial number
-func GetDevicesByControllerSerialNumber(controllerSerialNumber string) ([]models.Device, error) {
+// Helper function to get devices by controller identifier
+func GetDevicesByControllerIdentifier(controllerIdentifier string) ([]models.Device, error) {
 	bmsDB, err := getDBInstance()
 	if err != nil {
 		return nil, err
 	}
 
 	var devices []models.Device
-	if err := bmsDB.DB.Preload("Site.Customer").Where("controller_serial_number = ?", controllerSerialNumber).Find(&devices).Error; err != nil {
+	if err := bmsDB.DB.Preload("Site.Customer").Where("controller_identifier = ?", controllerIdentifier).Find(&devices).Error; err != nil {
 		return nil, fmt.Errorf("failed to get devices: %w", err)
 	}
 
@@ -197,5 +197,5 @@ func GetIgnoredDevices() ([]string, error) {
 }
 
 func IsEmpty(s DataStruct) bool {
-	return s.State == "" && s.CustomerID == uuid.Nil && s.CustomerName == "" && s.SiteID == uuid.Nil && s.SiteName == "" && s.Gateway == "" && s.Controller == "" && s.DeviceType == "" && s.ControllerSerialNumber == "" && s.DeviceName == "" && s.DeviceSerialNumber == "" && s.Data == nil && s.Timestamp.IsZero()
+	return s.State == "" && s.CustomerID == uuid.Nil && s.CustomerName == "" && s.SiteID == uuid.Nil && s.SiteName == "" && s.Gateway == "" && s.Controller == "" && s.DeviceType == "" && s.ControllerIdentifier == "" && s.DeviceName == "" && s.DeviceIdentifier == "" && s.Data == nil && s.Timestamp.IsZero()
 }

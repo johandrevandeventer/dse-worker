@@ -99,6 +99,9 @@ func GensetWorker(msg payload.Payload, logger *zap.Logger) (*workers.DataStruct,
 				continue
 			}
 
+			rawData["SerialNo1"] = device.ControllerIdentifier
+			processedData["SerialNo1"] = device.ControllerIdentifier
+
 			rawDataStruct = &workers.DataStruct{
 				State:                "Pre",
 				CustomerID:           device.Site.Customer.ID,

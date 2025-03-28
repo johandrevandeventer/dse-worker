@@ -38,7 +38,7 @@ func (e *Engine) startWorker() {
 			rawData, processedData, err := dseworker.DSEWorker(data, workersLogger)
 			if err != nil {
 				workersLogger.Error("Failed to process data", zap.Error(err))
-				return
+				continue
 			}
 
 			if workers.IsEmpty(*rawData) && workers.IsEmpty(*processedData) {

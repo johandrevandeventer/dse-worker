@@ -2,68 +2,67 @@ package dseworker
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/johandrevandeventer/dse-worker/internal/workers"
-	gensetworker "github.com/johandrevandeventer/dse-worker/internal/workers/dse_worker/genset"
+	"github.com/johandrevandeventer/dse-worker/internal/workers/dse_worker/dse890"
+	"github.com/johandrevandeventer/dse-worker/internal/workers/types"
 	"github.com/johandrevandeventer/kafkaclient/payload"
 	"go.uber.org/zap"
 )
 
 const (
 	DSETopicPrefix = "Rubicon/DSE/"
-	GatewayGenset  = "genset"
-	Worker         = "DSE"
+	WorkerTitle    = "DSE"
 )
 
-// Worker function mapping for gateways
-var gatewayWorkers = map[string]func(payload.Payload, *zap.Logger) (*workers.DataStruct, *workers.DataStruct, error){
-	GatewayGenset: gensetworker.GensetWorker,
+type Worker struct {
+	decoder   *Decoder
+	processor *Processor
+	logger    *zap.Logger
 }
 
-func DSEWorker(msg []byte, logger *zap.Logger) (rawDataStruct, processedDataStruct *workers.DataStruct, err error) {
+func NewWorker(logger *zap.Logger) *Worker {
+	decoder := NewDecoder()
+	processor := NewProcessor(logger)
+
+	// Priority 1
+	decoder.RegisterDecoder("DSE890", dse890.Decoder)
+	processor.RegisterProcessor("DSE890", dse890.Processor)
+
+	return &Worker{
+		decoder:   decoder,
+		processor: processor,
+		logger:    logger,
+	}
+}
+
+func (w *Worker) RunWorker(msg []byte) (messageInfo *types.MessageInfo, err error) {
 	p, err := payload.Deserialize(msg)
 	if err != nil {
-		return rawDataStruct, processedDataStruct, fmt.Errorf("failed to deserialize data: %w", err)
+		return messageInfo, fmt.Errorf("failed to deserialize data: %w", err)
 	}
 
-	rawDataStruct = &workers.DataStruct{}
-	processedDataStruct = &workers.DataStruct{}
+	w.logger.Info("Running worker", zap.String("worker", WorkerTitle), zap.String("topic", p.MqttTopic), zap.String("id", p.ID.String()))
 
-	logger.Info(fmt.Sprintf("Running worker -> %s", Worker), zap.String("topic", p.MqttTopic))
-
-	// Trim the worker prefix from the topic
 	trimmedTopic := workers.TrimPrefix(p.MqttTopic, DSETopicPrefix)
-
-	logger.Debug("Validating customer", zap.String("topic", trimmedTopic))
+	w.logger.Debug("Validating customer", zap.String("topic", trimmedTopic))
 
 	customer, err := workers.GetValidCustomer(trimmedTopic)
 	if err != nil {
-		return rawDataStruct, processedDataStruct, fmt.Errorf("customer validation failed: %w", err)
+		return messageInfo, fmt.Errorf("customer validation failed: %w", err)
 	}
 
-	logger.Debug("Validating gateway", zap.String("topic", trimmedTopic))
-
-	gateway, err := workers.GetValidGateway(trimmedTopic)
+	decodedPayloadInfo, err := w.decoder.DecodePayload(p.Message)
 	if err != nil {
-		return rawDataStruct, processedDataStruct, fmt.Errorf("gateway validation failed: %w", err)
+		return messageInfo, fmt.Errorf("failed to decode payload: %w", err)
 	}
 
-	logger.Debug(fmt.Sprintf("%s :: %s :: %s", Worker, customer, gateway))
+	w.logger.Debug(fmt.Sprintf("%s :: %s", WorkerTitle, customer))
 
-	// Convert gateway name to lowercase
-	gateway = strings.ToLower(gateway)
-
-	// Find the worker function and execute it
-	if workerFunc, exists := gatewayWorkers[gateway]; exists {
-		rawDataStruct, processedDataStruct, err = workerFunc(*p, logger)
-		if err != nil {
-			return rawDataStruct, processedDataStruct, fmt.Errorf("failed to process gateway data: %w", err)
-		}
-
-		return rawDataStruct, processedDataStruct, nil
-	} else {
-		return rawDataStruct, processedDataStruct, fmt.Errorf("no decoder function found for gateway: %s", gateway)
+	messageInfo, err = w.processor.ProcessPayload(decodedPayloadInfo.Type, *p)
+	if err != nil {
+		return messageInfo, fmt.Errorf("failed to process payload: %w", err)
 	}
 
+	return messageInfo, nil
 }

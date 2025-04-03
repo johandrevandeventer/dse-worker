@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/johandrevandeventer/devicesdb"
 	"github.com/johandrevandeventer/devicesdb/models"
+	"github.com/johandrevandeventer/dse-worker/internal/workers/types"
 )
 
 type Payload struct {
@@ -46,17 +47,6 @@ func getCustomerFromTopic(topic string) (string, error) {
 
 	// Return the customer
 	return topicParts[0], nil
-}
-
-func getGatewayFromTopic(topic string) (string, error) {
-	// Split the topic
-	topicParts := strings.Split(topic, "/")
-	if len(topicParts) < 2 {
-		return "", fmt.Errorf("invalid topic: %s", topic)
-	}
-
-	// Return the gateway
-	return topicParts[1], nil
 }
 
 // Helper function to get database instance
@@ -114,6 +104,21 @@ func GetDevicesByControllerIdentifier(controllerIdentifier string) ([]models.Dev
 	return devices, nil
 }
 
+// Helper function to get device by device identifier
+func GetDevicesByDeviceIdentifier(deviceIdentifier string) (models.Device, error) {
+	bmsDB, err := getDBInstance()
+	if err != nil {
+		return models.Device{}, err
+	}
+
+	var device models.Device
+	if err := bmsDB.DB.Preload("Site.Customer").Where("device_identifier = ?", deviceIdentifier).First(&device).Error; err != nil {
+		return models.Device{}, fmt.Errorf("failed to get device: %w", err)
+	}
+
+	return device, nil
+}
+
 // Helper function to validate and retrieve customer
 func GetValidCustomer(topic string) (string, error) {
 	customer, err := getCustomerFromTopic(topic)
@@ -135,29 +140,8 @@ func GetValidCustomer(topic string) (string, error) {
 	return "", fmt.Errorf("customer not found: %s", customer)
 }
 
-// Helper function to validate and retrieve gateway
-func GetValidGateway(topic string) (string, error) {
-	gateway, err := getGatewayFromTopic(topic)
-	if err != nil {
-		return "", fmt.Errorf("failed to get gateway: %w", err)
-	}
-
-	devices, err := GetAllDevices()
-	if err != nil {
-		return "", fmt.Errorf("failed to get devices: %w", err)
-	}
-
-	for _, d := range devices {
-		if strings.EqualFold(d.Gateway, gateway) {
-			return gateway, nil
-		}
-	}
-
-	return "", fmt.Errorf("gateway not found: %s", gateway)
-}
-
 // Helper function to read ignored controllers from json file
-func readIgnoredFile() (*IgnoredControllersAndDevices, error) {
+func readIgnoredFile() (*types.IgnoredControllersAndDevices, error) {
 	// Open the JSON file
 	file, err := os.Open("./internal/workers/ignored/ignored.json")
 	if err != nil {
@@ -166,7 +150,7 @@ func readIgnoredFile() (*IgnoredControllersAndDevices, error) {
 	defer file.Close()
 
 	// Decode the JSON file into the Config struct
-	var ignoredControllersAndDevices IgnoredControllersAndDevices
+	var ignoredControllersAndDevices types.IgnoredControllersAndDevices
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&ignoredControllersAndDevices)
 	if err != nil {
@@ -196,6 +180,7 @@ func GetIgnoredDevices() ([]string, error) {
 	return ignoredControllersAndDevices.IgnoredDevices, nil
 }
 
-func IsEmpty(s DataStruct) bool {
-	return s.State == "" && s.CustomerID == uuid.Nil && s.CustomerName == "" && s.SiteID == uuid.Nil && s.SiteName == "" && s.Gateway == "" && s.Controller == "" && s.DeviceType == "" && s.ControllerIdentifier == "" && s.DeviceName == "" && s.DeviceIdentifier == "" && s.Data == nil && s.Timestamp.IsZero()
+// Helper function to check if a DataStruct is empty
+func IsEmpty(s types.DataStruct) bool {
+	return s.State == "" && s.CustomerID == uuid.Nil && s.CustomerName == "" && s.SiteID == uuid.Nil && s.SiteName == "" && s.Controller == "" && s.DeviceType == "" && s.ControllerIdentifier == "" && s.DeviceName == "" && s.DeviceIdentifier == "" && s.Data == nil && s.Timestamp.IsZero()
 }

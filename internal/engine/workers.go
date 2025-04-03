@@ -2,10 +2,11 @@ package engine
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/johandrevandeventer/dse-worker/internal/flags"
-	"github.com/johandrevandeventer/dse-worker/internal/workers"
 	dseworker "github.com/johandrevandeventer/dse-worker/internal/workers/dse_worker"
+	"github.com/johandrevandeventer/dse-worker/internal/workers/types"
 	"github.com/johandrevandeventer/kafkaclient/payload"
 	"github.com/johandrevandeventer/logging"
 	"go.uber.org/zap"
@@ -34,87 +35,128 @@ func (e *Engine) startWorker() {
 				e.logger.Info("Kafka consumer output channel closed, stopping worker")
 				return
 			}
-			// Process the data (e.g., call DSEWorker)
-			rawData, processedData, err := dseworker.DSEWorker(data, workersLogger)
+
+			deserializedData, err := payload.Deserialize(data)
 			if err != nil {
-				workersLogger.Error("Failed to process data", zap.Error(err))
+				e.logger.Error("Failed to deserialize data", zap.Error(err))
 				continue
 			}
 
-			if workers.IsEmpty(*rawData) && workers.IsEmpty(*processedData) {
-				workersLogger.Warn("Empty data received, skipping")
+			worker := dseworker.NewWorker(workersLogger)
+
+			messageInfo, err := worker.RunWorker(data)
+			if err != nil {
+				if strings.Contains(err.Error(), "controller is ignored") {
+					errorSplit := strings.Split(err.Error(), "controller is ignored: ")
+					controllerID := errorSplit[1]
+					e.logger.Warn("Controller is ignored", zap.String("controllerID", controllerID))
+				} else if strings.Contains(err.Error(), "device is ignored") {
+					errorSplit := strings.Split(err.Error(), "device is ignored: ")
+					deviceID := errorSplit[1]
+					e.logger.Warn("Device is ignored", zap.String("deviceID", deviceID))
+				} else if strings.Contains(err.Error(), "device not found") {
+					errorSplit := strings.Split(err.Error(), "device not found: ")
+					deviceID := errorSplit[1]
+					e.logger.Warn("Device not found", zap.String("deviceID", deviceID))
+				} else {
+					e.logger.Error("Processing failed", zap.Error(err))
+				}
 				continue
 			}
 
-			if workers.IsEmpty(*rawData) {
-				workersLogger.Warn("Empty raw data received, skipping")
-				continue
-			}
+			for _, device := range messageInfo.Devices {
+				rawDataStruct := &types.DataStruct{
+					State:                "Pre",
+					CustomerID:           device.CustomerID,
+					CustomerName:         device.CustomerName,
+					SiteID:               device.SiteID,
+					SiteName:             device.SiteName,
+					Controller:           device.Controller,
+					DeviceType:           device.DeviceType,
+					ControllerIdentifier: device.ControllerIdentifier,
+					DeviceName:           device.DeviceName,
+					DeviceIdentifier:     device.DeviceIdentifier,
+					Data:                 device.RawData,
+					Timestamp:            device.Timestamp,
+				}
 
-			if workers.IsEmpty(*processedData) {
-				workersLogger.Warn("Empty processed data received, skipping")
-				continue
-			}
+				processedDataStruct := &types.DataStruct{
+					State:                "Post",
+					CustomerID:           device.CustomerID,
+					CustomerName:         device.CustomerName,
+					SiteID:               device.SiteID,
+					SiteName:             device.SiteName,
+					Controller:           device.Controller,
+					DeviceType:           device.DeviceType,
+					ControllerIdentifier: device.ControllerIdentifier,
+					DeviceName:           device.DeviceName,
+					DeviceIdentifier:     device.DeviceIdentifier,
+					Data:                 device.ProcessedData,
+					Timestamp:            device.Timestamp,
+				}
 
-			serializedRawData, err := json.Marshal(rawData)
-			if err != nil {
-				workersLogger.Error("Failed to serialize raw data", zap.Error(err))
-				return
-			}
+				serializedRawData, err := json.Marshal(rawDataStruct)
+				if err != nil {
+					workersLogger.Error("Failed to serialize raw data", zap.Error(err))
+					return
+				}
 
-			serializedProcessedData, err := json.Marshal(processedData)
-			if err != nil {
-				workersLogger.Error("Failed to serialize processed data", zap.Error(err))
-				return
-			}
+				serializedProcessedData, err := json.Marshal(processedDataStruct)
+				if err != nil {
+					workersLogger.Error("Failed to serialize processed data", zap.Error(err))
+					return
+				}
 
-			rp := payload.Payload{
-				Message:          serializedRawData,
-				MessageTimestamp: rawData.Timestamp,
-			}
+				rp := payload.Payload{
+					ID:               deserializedData.ID,
+					Message:          serializedRawData,
+					MessageTimestamp: rawDataStruct.Timestamp,
+				}
 
-			pp := payload.Payload{
-				Message:          serializedProcessedData,
-				MessageTimestamp: processedData.Timestamp,
-			}
+				pp := payload.Payload{
+					ID:               deserializedData.ID,
+					Message:          serializedProcessedData,
+					MessageTimestamp: processedDataStruct.Timestamp,
+				}
 
-			serializedRp, err := rp.Serialize()
-			if err != nil {
-				workersLogger.Error("Failed to serialize raw payload", zap.Error(err))
-				return
-			}
+				serializedRp, err := rp.Serialize()
+				if err != nil {
+					workersLogger.Error("Failed to serialize raw payload", zap.Error(err))
+					return
+				}
 
-			serializedPp, err := pp.Serialize()
-			if err != nil {
-				workersLogger.Error("Failed to serialize processed payload", zap.Error(err))
-				return
-			}
+				serializedPp, err := pp.Serialize()
+				if err != nil {
+					workersLogger.Error("Failed to serialize processed payload", zap.Error(err))
+					return
+				}
 
-			influxdb_kafka_topic := "rubicon_kafka_influxdb"
-			kodelabs_kafka_topic := "rubicon_kafka_kodelabs"
+				influxdb_kafka_topic := "rubicon_kafka_influxdb"
+				kodelabs_kafka_topic := "rubicon_kafka_kodelabs"
 
-			if flags.FlagEnvironment == "development" {
-				influxdb_kafka_topic = "rubicon_kafka_influxdb_development"
-				kodelabs_kafka_topic = "rubicon_kafka_kodelabs_development"
-			}
+				if flags.FlagEnvironment == "development" {
+					influxdb_kafka_topic = "rubicon_kafka_influxdb_development"
+					kodelabs_kafka_topic = "rubicon_kafka_kodelabs_development"
+				}
 
-			// Send the processed data to the Kafka producer
-			err = e.kafkaProducerPool.SendMessage(e.ctx, influxdb_kafka_topic, serializedRp)
-			if err != nil {
-				kafkaProducerLogger.Error("Failed to send raw data to Kafka", zap.Error(err))
-				return
-			}
+				// Send the processed data to the Kafka producer
+				err = e.kafkaProducerPool.SendMessage(e.ctx, influxdb_kafka_topic, serializedRp)
+				if err != nil {
+					kafkaProducerLogger.Error("Failed to send raw data to Kafka", zap.Error(err))
+					return
+				}
 
-			err = e.kafkaProducerPool.SendMessage(e.ctx, influxdb_kafka_topic, serializedPp)
-			if err != nil {
-				kafkaProducerLogger.Error("Failed to send processed data to Kafka", zap.Error(err))
-				return
-			}
+				err = e.kafkaProducerPool.SendMessage(e.ctx, influxdb_kafka_topic, serializedPp)
+				if err != nil {
+					kafkaProducerLogger.Error("Failed to send processed data to Kafka", zap.Error(err))
+					return
+				}
 
-			err = e.kafkaProducerPool.SendMessage(e.ctx, kodelabs_kafka_topic, serializedPp)
-			if err != nil {
-				kafkaProducerLogger.Error("Failed to send processed data to Kafka", zap.Error(err))
-				return
+				err = e.kafkaProducerPool.SendMessage(e.ctx, kodelabs_kafka_topic, serializedPp)
+				if err != nil {
+					kafkaProducerLogger.Error("Failed to send processed data to Kafka", zap.Error(err))
+					return
+				}
 			}
 		}
 	}
